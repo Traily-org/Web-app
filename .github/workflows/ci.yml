@@ -1,0 +1,52 @@
+name: CI Web-app
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main, "feat/**", "feature/**", "fix/**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: traily-web
+
+jobs:
+  protect-main:
+    name: Protection main (PR uniquement depuis develop)
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier la branche source
+        working-directory: .
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "::error::Les PR vers main ne sont autorisées que depuis develop (source actuelle : ${{ github.head_ref }})"
+            exit 1
+          fi
+
+  checks:
+    name: Format, lint, types et build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: traily-web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Formatage (Prettier)
+        run: pnpm format:check
+      - name: Lint (oxlint)
+        run: pnpm lint
+      - name: Types (tsc)
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
